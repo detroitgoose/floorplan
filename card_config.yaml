@@ -181,7 +181,7 @@ cards:
                     tap_action:
                       action: none
                     type: image
-This is another RGBW LED, so same setup:                    
+### This is another RGBW LED, so same setup:                    
                   - action: none
                     entity: light.side_window_led
                     hold_action:
