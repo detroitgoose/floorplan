@@ -22,6 +22,7 @@ cards:
           cards:
           
 ### config-template-card allows for javascript and css styling:
+### It's important to add every entity used so the image updates on state change
 
             - type: custom:config-template-card
               entities:
@@ -38,8 +39,10 @@ cards:
                 - sun.sun
               card:
                 type: picture-elements
-### Background image. scene with near full darkness
-### Bo lights on, but slight environment light added (04:00 morning):
+                
+### Background image. scene with near full darkness with
+### no lights on, but slight environment light added (04:00 morning):
+
                 image: /local/ui/floorplan/main/16534_june_4.png
                 style: |
                   ha-card:first-child {
@@ -50,7 +53,10 @@ cards:
                     entity: sensor.time
                     hold_action:
                       action: none
-### This is poorly coded: My attempt to change plan image every couple hour to show sun shadow:
+                      
+### This is probably poorly coded but works. My attempt to change plan image every 
+### couple hours to show the change in sun shadow:
+
                     image: >-
                       ${states['sun.sun'].state == 'below_horizon' ?
                       '/local/ui/floorplan/transparent.png' :
@@ -75,7 +81,9 @@ cards:
                       height: 100%
                       left: 50%
                       mix-blend-mode: lighten
+                      
 ### This is part of luke vink's setup. you'll have to see his template sensor config for more info:
+
                       opacity: ${states['sensor.cloud_opacity'].state}
                       top: 50%
                       width: 100%
@@ -92,9 +100,11 @@ cards:
                     style:
                       left: 50%
                       mix-blend-mode: lighten
+                      
 ### I couldn't really tell if the lights were on below about 25% brightness, so this code will
 ### show any brightness value below '.25' as if it were on at 25%, then brighten from there.
 ### Note: '64' is about 25% of 255
+
                       opacity: >-
                         ${states['light.bathroom_dimmer'].state === 'on' ?
                         (states['light.bathroom_dimmer'].attributes.brightness <
@@ -107,8 +117,9 @@ cards:
                       action: none
                     type: image
 
-### An RGBW LED composing of 3 different images. This first one I made a yellowish warm light
-### to replicate the LEDs white channel:                  
+### An RGBW LED composing of 3 different images. This first render I made a yellowish warm light
+### to replicate the LEDs white channel:  
+
                   - action: none
                     entity: light.picture_window
                     hold_action:
@@ -130,8 +141,10 @@ cards:
                     tap_action:
                       action: none
                     type: image
+                    
 ### This second image of the light on was done with on a RED light, which gets a
 ### hue shift to accurately represent your LED RGB color
+
                   - action: none
                     entity: light.picture_window
                     hold_action:
@@ -159,7 +172,9 @@ cards:
                     tap_action:
                       action: none
                     type: image
-### This last image was rendered with a COOL white light to represent RGB at 255/255/255:                    
+                    
+### This last image was rendered with a COOL white light to represent RGB at 255/255/255:
+
                   - action: none
                     entity: light.picture_window
                     hold_action:
@@ -181,7 +196,9 @@ cards:
                     tap_action:
                       action: none
                     type: image
-### This is another RGBW LED, so same setup:                    
+                    
+### This is another RGBW LED, so same setup as before: 
+
                   - action: none
                     entity: light.side_window_led
                     hold_action:
@@ -255,6 +272,7 @@ cards:
                     type: image
 
 ### A simple on/off light. I've found I could keep the opacity/brightness bit. It's always 100% aka 255:
+
                   - action: none
                     entity: light.sink_light
                     hold_action:
@@ -274,6 +292,7 @@ cards:
                     type: image
 
 ### A fan switch. Just a reminder that you can play with GIF files too ;)
+
                   - action: none
                     entity: switch.fan
                     hold_action:
@@ -284,6 +303,7 @@ cards:
                       top: 50%
                       left: 50%
                       width: 100%
+### Note that because this is one line, you need ' ' on either end:
                       opacity: '${states[''switch.fan''].state === ''on'' ? ''1'' : ''0''}'
                     tap_action:
                       action: none
@@ -299,6 +319,7 @@ cards:
                       top: 50%
                       left: 50%
                       width: 100%
+ ### Contrary to the previous example, multi-line does not have ' ' but uses >- to start
                       opacity: >-
                         ${states['binary_sensor.mail'].state === 'on' ? '1' :
                         '0'}
@@ -314,10 +335,17 @@ cards:
                     entity: sensor.yard_local_path
                     hold_action:
                       action: none
+### I'm using a sensor that's updated with a time/date stamped image path that
+### points to the most recent snapshot. This is so that the newest image updates on
+### the state change of the sensor entity. This was to avoid using a camera entity, which
+### seemed to update every 10 seconds or so and add to bandwidth usage when on mobile data
+### You can basically ignore this section, but I'm proud it's working!
                     image: ${states['sensor.yard_local_path'].state}
                     style:
                       filter: ''
                       left: 50%
+### because this is overlayed directly on the floorplan, I have to manually reduce opacity
+### so that the image roughly follows the darkenss of the floorplan image behind it
                       opacity: >-
                         ${states['sun.sun'].state == 'below_horizon' ? '0.1' :
                         states['sensor.time'].state >= '20:00' ? '0.9' :
@@ -333,8 +361,11 @@ cards:
                     tap_action:
                       action: none
                     type: image
-### This :is the floor select that "leads" to the basement when I click on my main flor stairs
+
+### Back to what you're interested in:
+### This is the floor select that "leads" to the basement when I click on my main floor stairs
 ### Because there are only two floors, and so two inputs, i just used the same 'select_next' service
+### in both main and basement cards
                   - type: image
                     entity: input_select.floor_select
                     tap_action:
@@ -359,14 +390,19 @@ cards:
                     tap_action:
                       action: toggle
                     state_image:
+### A "hidden" button positioned over the action area using a small transparent PNG 
                       'on': /local/ui/floorplan/transparent.png
                       'off': /local/ui/floorplan/transparent.png
+### very handy for troubleshooting disconnected devices quickly. This is the
+### transparent PNG image from above, edited to have a red outline. When you see the
+### red box you'll know a device has a state of "unavailable"
                       unavailable: /local/ui/floorplan/unavailable.png
                     style:
                       top: 33%
                       left: 17%
                       width: 6%
                       height: 6%
+### When you're positioning your box it's helpful to change this to "solid" so you can see it:
                       border: null
                       
                       
@@ -384,7 +420,9 @@ cards:
                       width: 10%
                       height: 10%
                       border: null
-### Note the RGBW LEDs only have one button, but those 3 different images for color channels
+
+### Note the RGBW LED only has this one button, but also those 3 different images for 
+### color channels mentioned previously (warm, red, cool)
                   - type: image
                     entity: light.side_window_led
                     tap_action:
@@ -456,7 +494,9 @@ cards:
                     entity: sensor.time
                     hold_action:
                       action: none
-### FWIW I can't really say this mess is worth the sun shadows...
+### FWIW I can't really say this mess is worth the sun shadows... maybe kinda.
+### just means you're rendering your floorplan with lights off a number of times
+
                     image: >-
                       ${states['sun.sun'].state == 'below_horizon' ?
                       '/local/ui/floorplan/transparent.png' :
@@ -487,7 +527,8 @@ cards:
                     tap_action:
                       action: none
                     type: image
-### Note these HUE LED lights are only RGBW, so each one only has images rendered in
+                    
+### Note these Phillips HUE LED lights are only RGB, so each one only has images rendered in
 ### RED and COOL white:
                   - action: none
                     entity: light.hue_color_lamp_1
@@ -588,9 +629,6 @@ cards:
                       action: none
                     type: image
 
-### I have more cards stack underneath this, but they're nothing particular to the floorplan setup
-### Cheers!
-
                   - type: image
                     entity: light.hue_color_lamp_1
                     tap_action:
@@ -619,6 +657,9 @@ cards:
                       width: 12%
                       height: 12%
                       border: null
+                      
+### centered over the basement stairs, clicking here will take you back to the 
+### main floor conditional card
 
                     entity: input_select.floor_select
                     tap_action:
@@ -659,3 +700,6 @@ cards:
                 - entity: sensor.ht_basement_humidity
               columns: 2
               title: 'Basement:'
+
+### I have more cards stack underneath this, but they're nothing particular to the floorplan setup
+### Cheers!
