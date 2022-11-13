@@ -1,3 +1,7 @@
+### IMPORTANT: THIS CONFIG IS NOW OBSOLETE AS OF HA CORE 11.1
+### SEE OTHER CONFIG FOR WORKAROUND.
+
+
 
 ### I've stripped out most of my entities and code to show the basics of RGBW and RGB
 ### I've hacked it all together... so it works but I'd love to hear more efficient ways to code
