@@ -1,6 +1,6 @@
 # floorplan
 
-Hi, This is a stripped down version of my Home Assistant floorplan
+Hi, This is a (slightly) stripped down version of my Home Assistant floorplan
 
 This has been been heavily inspired/forked from https://github.com/lukevink/hass-config-lajv
 
