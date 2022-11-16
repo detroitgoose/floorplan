@@ -1,0 +1,1755 @@
+### This floorplan is heavily inspired by https://github.com/lukevink/hass-config-lajv
+### Note, following the above tutorial will not work as expect after HA Core 11.0
+
+### I first created a 3d image of my home using "Sweet Home 3D" http://www.sweethome3d.com/
+### Each light source is then rendered individually (1 image per light, unless RGB/RGBW)
+### CSS "mix-blend-mode: lighten" is then used to overlay the light source on the base home image.
+### "mix-blend-mode: normal" is used for images that I don't want blended (GIFS)
+
+### Node RED is doing a lot of heavy lifting behind the scenes, but optional https://nodered.org
+
+### This is a rough template for your use. You will have to change all the entities and image paths
+### or you'll encounter errors.
+
+### To begin:
+### My two floors, main and basement, are side by side on a horizontal stack.
+### The trick is a conditional card to select between them with an input_select
+
+type: horizontal-stack
+cards:
+  - type: horizontal-stack
+    cards:
+      - type: conditional
+        conditions:
+          - entity: input_select.floor_select
+            state: main
+        card:
+### My first card type is vertical so I can place additional card below the floorplan.
+### Those cards are not shown in this example. They include music selection, light presets,
+### floor specific temperature/humidity, and more:
+          type: vertical-stack
+
+### Previously, this is where I wrapped the entire floorplan in a config-template-card,
+### as per Luke Vink's example. THIS IS NO LONGER SUGGESTED AFTER HA CORE 11.0
+### The result is EVERY image reloading on EVERY state change, which makes it look like
+### the floorplan is flashing/flickering. This can be mitigated by placing
+### each picture element into its own config-template-card
+
+### The flickering issue is still a problem after core 11.0, especially with regularly
+### updating sensors (ie sensor.time)
+### I've removed all such sensors as update triggers.
+          cards:
+            - type: picture-elements
+### The base image is a night time render with just a touch of overhead light
+### with NO other light sources on
+              image: /local/ui/floorplan/main/main_night.png
+              style: |
+                ha-card:first-child {
+                background: rgba(0, 0, 0, 0)
+                }
+              elements:
+### The next image is a day time image rendered without sun shadows and NO lights on
+### I previously had javascript changing the image (and thus shadows) based on time of day,
+### but the flickering issue caused me to resort to a static day image and
+### change the opacity based on sun elevation and cloud coverage using a template sensor
+                - type: custom:config-template-card
+                  entities:
+                    - sensor.floorplan_opacity
+                  style:
+                    height: 100%
+                    left: 50%
+
+                    mix-blend-mode: lighten
+### changing the opacity here will transition between day and night
+### This sensor is Node Red generated
+                    opacity: ${states['sensor.floorplan_opacity'].state}
+                    top: 50%
+                    width: 100%
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/main_day.png
+                    action: none
+                    entity: sensor.floorplan_opacity
+### Note, you dont want this next section of images clickable! We'll get to that later.
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+### Dimmer light
+                - type: custom:config-template-card
+                  entities:
+                    - light.bedroom_ceiling
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/br_ceiling.png
+                    action: none
+                    entity: light.bedroom_ceiling
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+### Note the dimmer opacity is tied to the entity's brightness, BUT it can
+### be difficult to see a low brightness image during a daytime scene.
+### To remedy this, if the brightness value is between 1 and 25%, it will display as
+### 25%, higher than 25% displays at its respective value.
+### I use this on ALL dimming lights in my config.
+                    opacity: >-
+                      ${states['light.bedroom_ceiling'].state === 'on' ?
+                      (states['light.bedroom_ceiling'].attributes.brightness <
+                      '64 '? '.25' :
+                      states['light.bedroom_ceiling'].attributes.brightness/
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+
+### Color accurate RGBW LED:
+
+### Note you'll see three different images combined to create the variations
+### based on RGB color, RGB white, and the warm channel
+### In Sweet Home 3D the light sources are rendered with WARM white, RED, and COOL white, repectively
+
+### This first uses a WARM light rendering to account for the warm white channel
+                - type: custom:config-template-card
+                  entities:
+                    - light.br_led
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/br_led_warm.png
+                    action: none
+                    entity: light.br_led
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+### If white channel brightness is between 1% to 35%, the image shows at 35%
+### (because it can be hard to see during the day with low brightness.)
+
+### Note, opactiy is following the brightness of the 4th RGBW_color AKA [3]
+                    opacity: >-
+                      ${states['light.br_led'].state === 'on' ?
+                      (states["light.br_led"].attributes.rgbw_color[3] < '89' &&
+                      states["light.br_led"].attributes.rgbw_color[3] > '0' ?
+                      '.35': states["light.br_led"].attributes.rgbw_color[3] /
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+### The second image is rendered us RED light to aproximate RGB colors with hue shift
+                - type: custom:config-template-card
+                  entities:
+                    - light.br_led
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/br_led_red.png
+                    action: none
+                    entity: light.br_led
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+### HUE Rotate to match the color of the RED image to the RGB value of the light:
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.br_led"].attributes.hs_color ?
+                      states["light.br_led"].attributes.hs_color[0] : "0") +
+                      "deg) saturate(" +
+                      (states["light.br_led"].attributes.hs_color ?
+                      states["light.br_led"].attributes.hs_color[1] : 100)+ "%)"
+                      }
+                    opacity: >-
+                      ${states['light.br_led'].state === 'on' ?
+                      (states['light.br_led'].attributes.brightness < '102 '?
+                      '.4' : states["light.br_led"].attributes.brightness / 255)
+                      : '0' }
+                    top: 50%
+                    width: 100%
+### The third image is rendered using COOL light to display RGB at 255/255/255 (white)
+                - type: custom:config-template-card
+                  entities:
+                    - light.br_led
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/br_led_cool.png
+                    action: none
+                    entity: light.br_led
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ ( states["light.br_led"].attributes.brightness ?
+                      states["light.br_led"].attributes.brightness / 255 : 0) -
+                      (states["light.br_led"].attributes.hs_color ?
+                      states["light.br_led"].attributes.hs_color[1]/99 : 0)}
+                    top: 50%
+                    width: 100%
+### Dimmer light
+                - type: custom:config-template-card
+                  entities:
+                    - light.bathroom_dimmer
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/bathroom.png
+                    action: none
+                    entity: light.bathroom_dimmer
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.bathroom_dimmer'].state === 'on' ?
+                      (states['light.bathroom_dimmer'].attributes.brightness <
+                      '64 '? '.25' :
+                      states['light.bathroom_dimmer'].attributes.brightness/
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+### This a a NON-DIMMING light. Note, there is no javascript used and so wrapping
+### this in a config-template-card is unneccesary. Even so, I do it for uniformity and
+### possible future upgrades to dimmable or color changing lights.
+                - type: custom:config-template-card
+                  entities:
+                    - light.hall
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/hall.png
+                    action: none
+                    entity: light.hall
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+### Previous to HA core 11.0 I had every non-dimming light using the same brightness
+### configuration found in the dimming examples. After changing my config to wrap
+### individual elements in a config-template-card, using brightness no longer worked
+### for non-dimming lights. So here is a simple ON = 100% opacity, OFF = 0% opacity
+                    opacity: '${states[''light.hall''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+### Another RGBW LED
+### WARM:
+                - type: custom:config-template-card
+                  entities:
+                    - light.picture_window
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/picture_led_warm.png
+                    action: none
+                    entity: light.picture_window
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.picture_window'].state === 'on' ?
+                      (states["light.picture_window"].attributes.rgbw_color[3] <
+                      '89' &&
+                      states["light.picture_window"].attributes.rgbw_color[3] >
+                      '0' ? '.35':
+                      states["light.picture_window"].attributes.rgbw_color[3] /
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+### RED
+                - type: custom:config-template-card
+                  entities:
+                    - light.picture_window
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/picture_led_red.png
+                    action: none
+                    entity: light.picture_window
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.picture_window"].attributes.hs_color ?
+                      states["light.picture_window"].attributes.hs_color[0] :
+                      "0") + "deg) saturate(" +
+                      (states["light.picture_window"].attributes.hs_color ?
+                      states["light.picture_window"].attributes.hs_color[1] :
+                      100)+ "%)" }
+### Note that this shows brightness under 40% as 40% (because hard to see during the day)
+                    opacity: >-
+                      ${states['light.picture_window'].state === 'on' ?
+                      (states['light.picture_window'].attributes.brightness <
+                      '102 '? '.4' :
+                      states["light.picture_window"].attributes.brightness /
+                      255) : '0' }
+                    top: 50%
+                    width: 100%
+### RGB White
+                - type: custom:config-template-card
+                  entities:
+                    - light.picture_window
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/picture_led_cool.png
+                    action: none
+                    entity: light.picture_window
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ ( states["light.picture_window"].attributes.brightness
+                      ? states["light.picture_window"].attributes.brightness /
+                      255 : 0) -
+                      (states["light.picture_window"].attributes.hs_color ?
+                      states["light.picture_window"].attributes.hs_color[1]/99 :
+                      0)}
+                    top: 50%
+                    width: 100%
+### Another RGBW
+                - type: custom:config-template-card
+                  entities:
+                    - light.side_window_led
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/side_led_warm.png
+                    action: none
+                    entity: light.side_window_led
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.side_window_led'].state === 'on' ?
+                      (states["light.side_window_led"].attributes.rgbw_color[3]
+                      < '89' &&
+                      states["light.side_window_led"].attributes.rgbw_color[3] >
+                      '0' ? '.35':
+                      states["light.side_window_led"].attributes.rgbw_color[3] /
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.side_window_led
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/side_led_red.png
+                    action: none
+                    entity: light.side_window_led
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.side_window_led"].attributes.hs_color ?
+                      states["light.side_window_led"].attributes.hs_color[0] :
+                      "0") + "deg) saturate(" +
+                      (states["light.side_window_led"].attributes.hs_color ?
+                      states["light.side_window_led"].attributes.hs_color[1] :
+                      100)+ "%)" }
+                    opacity: >-
+                      ${states['light.side_window_led'].state === 'on' ?
+                      (states['light.side_window_led'].attributes.brightness <
+                      '102 '? '.4' :
+                      states["light.side_window_led"].attributes.brightness /
+                      255) : '0' }
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.side_window_led
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/side_led_cool.png
+                    action: none
+                    entity: light.side_window_led
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ ( states["light.side_window_led"].attributes.brightness
+                      ? states["light.side_window_led"].attributes.brightness /
+                      255 : 0) -
+                      (states["light.side_window_led"].attributes.hs_color ?
+                      states["light.side_window_led"].attributes.hs_color[1]/99
+                      : 0)}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.living_room_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/lr_lamp.png
+                    action: none
+                    entity: light.living_room_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.living_room_light'].state === 'on' ? '1' :
+                      '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.piano
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/piano.png
+                    action: none
+                    entity: light.piano
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+### note that single line code needs to be wrapped with ''
+                    opacity: '${states[''light.piano''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.front_porch_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/porch_light.png
+                    action: none
+                    entity: light.front_porch_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+### Multi-line does note require the ''
+                    opacity: >-
+                      ${states['light.front_porch_light'].state === 'on' ? '1' :
+                      '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.flood_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/flood.png
+                    action: none
+                    entity: light.flood_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: '${states[''light.flood_light''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+### Dimmer light
+                - type: custom:config-template-card
+                  entities:
+                    - light.fan_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/fan_light.png
+                    action: none
+                    entity: light.fan_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.fan_light'].state === 'on' ?
+                      (states['light.fan_light'].attributes.brightness < 64 ?
+                      .25 : states['light.fan_light'].attributes.brightness/
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.sink_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/kitchen_sink.png
+                    action: none
+                    entity: light.sink_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: '${states[''light.sink_light''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.ceiling_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/kitchen_ceiling.png
+                    action: none
+                    entity: light.ceiling_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.ceiling_light'].state === 'on' ? '1' :
+                      '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.dome_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/top_stairs.png
+                    action: none
+                    entity: light.dome_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: '${states[''light.dome_light''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+### Dimmer light
+                - type: custom:config-template-card
+                  entities:
+                    - light.office_ceiling
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/office_ceiling.png
+                    action: none
+                    entity: light.office_ceiling
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.office_ceiling'].state === 'on' ?
+                      (states['light.office_ceiling'].attributes.brightness /
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - switch.desk_outlet
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/office_desk.png
+                    action: none
+                    entity: switch.desk_outlet
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['switch.desk_outlet'].state === 'on' ?
+                      '1' : '0'}
+                    top: 50%
+                    width: 100%
+### A white/blue glow from the living room TV when ON
+                - type: custom:config-template-card
+                  entities:
+                    - media_player.livingroom_tv
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/lr_tv.png
+                    action: none
+                    entity: media_player.livingroom_tv
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['media_player.livingroom_tv'].state === 'on' ?
+                      '1' : '0'}
+                    top: 50%
+                    width: 100%
+### A white/blue glow from the bedroom TV when ON
+                - type: custom:config-template-card
+                  entities:
+                    - media_player.bedroom_tv
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/br_tv.png
+                    action: none
+                    entity: media_player.bedroom_tv
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['media_player.bedroom_tv'].state === 'on' ? '1' :
+                      '0'}
+                    top: 50%
+                    width: 100%
+### GIF of a my porch fan. I used the Sweet Home 3D fan, put "greenscreen" color behind it,
+### rotated it 20 degrees, took a snapshot, repeat until full circle. I then removed all of
+### the green and made it a GIF for a perspective appropriate image.
+### If I redo my base images, I'll remove the fan completely, and show a static fan when
+### the state is off, and the GIF when on... as currently the GIF is layed over the static image
+                - type: custom:config-template-card
+                  entities:
+                    - switch.fan
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/fan.gif
+                    action: none
+                    entity: switch.fan
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: '${states[''switch.fan''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+### A "breathing" light where and when I've got mail
+                - type: custom:config-template-card
+                  entities:
+                    - binary_sensor.mail
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/main/mail.gif
+                    action: none
+                    entity: binary_sensor.mail
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: '${states[''binary_sensor.mail''].state === ''on'' ? ''1'' : ''0''}'
+                    top: 50%
+                    width: 100%
+### Music bars when the snapcast server is playing music
+                - type: custom:config-template-card
+                  entities:
+                    - >-
+                      media_player.snapcast_group
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/music_bars.gif
+                    action: none
+                    entity: >-
+                      media_player.snapcast_group
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    left: 38%
+                    top: 27%
+                    width: 20%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['media_player.snapcast_group'].state
+                      === 'playing' ? '1':'0'}
+### Music notes when the office speaker is on
+                - type: custom:config-template-card
+                  entities:
+                    - switch.office_speaker
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/musical-notes-joypixels.gif
+                    action: none
+                    entity: switch.office_speaker
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    left: 50%
+                    top: 43%
+                    width: 10%
+                    mix-blend-mode: normal
+                    opacity: >-
+                      ${states['switch.office_speaker'].state === 'on' ? '1' :
+                      '0'}
+### Fun but rather complicated. This image is created through automated image proccessing using
+### Node Red and ImageMagick. The end result is an accurate display of ground conditions (ie: leaves, snow)
+### I take a snapshot of my front yard, crop out a section of grass, create a seamless tile, and mask
+### everything but the grass sections of my floorplan.
+### During the proccess, I create a date/time stamped image filename and feed it into sensor.yard_local_path
+### so that my floorplan grass is ONLY updated when a new image is taken (opposed to a generic camera
+### solution to avoid browser cache issues.) After a new image is created, the old file is automatically removed.
+
+### The opacity is the same sensor used on the rest of the image to approximate sunlight
+                - type: custom:config-template-card
+                  entities:
+                    - sensor.yard_local_path
+                    - sensor.floorplan_opacity
+                  element:
+                    type: image
+                    image: ${states['sensor.yard_local_path'].state}
+                    action: none
+                    entity: sensor.yard_local_path
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    opacity: ${states['sensor.floorplan_opacity'].state}
+                    top: 50%
+                    width: 100%
+### This next section is where transparent buttons are created to switch states
+
+### Of greater importance is this first input_select which changes the conditional
+### card between main floor and basement when I click on the stairs. Because I only 
+### have two floors, I do not have to specify which input to select, and simply use
+### "select_next" to toggle between the two entries. This exact same code is used
+### futher down the config on the basement card
+                - type: image
+                  entity: input_select.floor_select
+                  tap_action:
+                    action: call-service
+                    service: input_select.select_next
+                    service_data:
+                      entity_id: input_select.floor_select
+                  state_image:
+                    main: /local/ui/floorplan/transparent.png
+                    basement: /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+### This is placement and size of the button. For best result, keep them square
+### OR landscape rectangle. Portrait syle rectangles seem to act like simple squares
+### and you won't be about to click on the upper or lower sections
+                    top: 45%
+                    left: 31%
+                    width: 14%
+                    height: 4%
+### I leave "border: null" as a placeholder. If I need to change the location,
+### I'll change this to "border: solid" to see an outline of the transparent image
+                    border: null
+### Each light gets its own transparent button. Note a state of "unavailble"
+### has its own image, which in my case is the transparent.png with a red border.
+### This gives a nice indication of when entities are disconnected
+                - type: image
+                  entity: light.sink_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 33%
+                    left: 17%
+                    width: 6%
+                    height: 6%
+                    border: null
+                - type: image
+                  entity: light.ceiling_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 35%
+                    left: 30%
+                    width: 8%
+                    height: 8%
+                    border: null
+                - type: image
+                  entity: light.dome_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 45%
+                    left: 19%
+                    width: 4%
+                    height: 4%
+                    border: null
+### You can call scripts too! When I tap once, it calls the script to
+### turn on the speaker and start the music. If I hold it will turn off
+### the speaker but keep the music playing (for snapcast multi-room
+### syncronized audio.)
+                - type: image
+                  entity: switch.kitchen_bluetooth
+                  tap_action:
+                    action: call-service
+                    service: script.start_bluetooth_and_pandora
+                  hold_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 27.5%
+                    left: 39%
+                    width: 4%
+                    height: 4%
+                    border: null
+                - type: image
+                  entity: light.office_ceiling
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 37%
+                    left: 50%
+                    width: 7%
+                    height: 7%
+                    border: null
+                - type: image
+                  entity: switch.chelsea_desk_outlet
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 32%
+                    left: 56%
+                    width: 5%
+                    height: 5%
+                    border: null
+                - type: image
+                  entity: light.bathroom_dimmer
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 47%
+                    left: 78%
+                    width: 10%
+                    height: 10%
+                    border: null
+                - type: image
+                  entity: light.hall
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 49%
+                    left: 68%
+                    width: 9%
+                    height: 9%
+                    border: null
+                - type: image
+                  entity: light.bedroom_ceiling
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 72%
+                    left: 77%
+                    width: 9%
+                    height: 9%
+                    border: null
+                - type: image
+                  entity: light.br_led
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 79%
+                    left: 90%
+                    width: 10%
+                    height: 10%
+                    border: null
+                - type: image
+                  entity: light.front_porch_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 89%
+                    left: 10%
+                    width: 8%
+                    height: 8%
+                    border: null
+### This is 1 button that controls 2 entites/devices
+### I have a dimmer on my porch fan light, and a simple on/off
+### relay on the fan. So a single tap will toggle the fan light
+### but a double tap turns the fan on.
+
+### I'll need to re-test this, but I think I ended up making a script
+### to call because the image type element could only have a single entity.
+### (IE couldn't use light.fan_light and switch.fan in the same element)
+### Since you CAN have an entity and a script, the script calls the other entity
+                - type: image
+                  entity: light.fan_light
+                  tap_action:
+                    action: toggle
+                  double_tap_action:
+                    action: call-service
+                    service: script.1662684688232
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 16%
+                    left: 33%
+                    width: 10%
+                    height: 10%
+                    border: null
+                - type: image
+                  entity: light.flood_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 45%
+                    left: 7%
+                    width: 9%
+                    height: 9%
+                    border: null
+                - type: image
+                  entity: light.living_room_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 82%
+                    left: 31%
+                    width: 5%
+                    height: 5%
+                    border: null
+### One of those RGBW LED lights. Note the button is as simple as any other
+                - type: image
+                  entity: light.side_window_led
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 61%
+                    left: 10%
+                    width: 7%
+                    height: 7%
+                    border: null
+### Another RGBW button
+                - type: image
+                  entity: light.picture_window
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 82%
+                    left: 42%
+                    width: 9%
+                    height: 9%
+                    border: null
+                - type: image
+                  entity: light.piano
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 63%
+                    left: 21%
+                    width: 7%
+                    height: 7%
+                    border: null
+### Turning ON a media player can require some fooling around. This script
+### checks the current state and toggles to the other, either off with
+### media_player OFF, or ON with a wake-on-lan call.
+                - type: image
+                  entity: media_player.livingroom_tv
+                  tap_action:
+                    action: more-info
+                  hold_action:
+                    action: call-service
+                    service: script.lg_tv_on_off
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 73%
+                    left: 53%
+                    width: 6%
+                    height: 6%
+                    border: null
+                - type: image
+                  entity: switch.office_speaker
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 47%
+                    left: 50%
+                    width: 6%
+                    height: 6%
+                    border: null
+### This is a conditional state label that shows the current music playing
+### that uses a node red HA entity sensor with "Artist - Song Title" as a string.
+### If you double click on the label it will advance to the next song.
+                - type: conditional
+                  conditions:
+                    - entity: switch.pianobar_start
+                      state: 'on'
+                  elements:
+                    - type: state-label
+                      tap_action:
+                        action: none
+                      hold_action:
+                        action: more-info
+                      double_tap_action:
+                        action: call-service
+                        service: script.pianobar_next
+                      entity: sensor.pianobar_nowplaying
+                      style:
+                        top: 4%
+                        left: 50%
+                        width: min-content
+                        color: '#000'
+                        overflow-wrap: anywhere
+                        border-radius: 0%
+                        text-align: right
+                        background-color: rgba(255, 255, 255, 0.5)
+                        font-size: 80%
+                        font-weight: bold
+                        text-shadow: 0.25px 0.5px 0.5px white
+### Outdoor temperature state-label
+
+### Note, these are difficult to position if you are using many different sized
+### viewing screens (ie mobile vs desktop vs tablet.)
+### One workaround could be having a different user per device type and using
+### a different config for each user.
+                - type: state-label
+                  entity: sensor.fan_temperature
+                  prefix: 'Outside: '
+                  style:
+                    top: 93%
+                    left: 50%
+                    color: '#000'
+                    border-radius: 0%
+                    text-align: center
+                    background-color: rgba(255, 255, 255, 0.5)
+                    font-size: 80%
+                    font-weight: bold
+                    text-shadow: 0.25px 0.5px 0.5px white
+###
+### Here starts the conditional card in a horizontal stack holding the basement config:
+###
+### This is structurally identical to the main floor card
+###
+      - type: conditional
+        conditions:
+          - entity: input_select.floor_select
+            state: basement
+        card:
+          type: vertical-stack
+          cards:
+### remember to use floor specific day/night images:
+            - type: picture-elements
+              image: /local/ui/floorplan/basement/basement_night.png
+              style: |
+                ha-card:first-child {
+                background: rgba(0, 0, 0, 0)
+                }
+              elements:
+                - type: custom:config-template-card
+                  entities:
+                    - sensor.floorplan_opacity
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: ${states['sensor.floorplan_opacity'].state}
+                    top: 50%
+                    width: 100%
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/basement_day.png
+                    action: none
+                    entity: sensor.floorplan_opacity
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+### The basement is all Phillips HUE RGB lights
+### Note that without a WARM white channel, only two images are rendered per light.
+
+### First is the RED render
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_4
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/bathroom_red.png
+                    action: none
+                    entity: light.hue_color_lamp_4
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.hue_color_lamp_4"].attributes.hs_color ?
+                      states["light.hue_color_lamp_4"].attributes.hs_color[0] :
+                      "0") + "deg) saturate(" +
+                      (states["light.hue_color_lamp_4"].attributes.hs_color ?
+                      states["light.hue_color_lamp_4"].attributes.hs_color[1] :
+                      100)+ "%)" }
+                    opacity: >-
+                      ${states['light.hue_color_lamp_4'].state === 'on' ?
+                      (states['light.hue_color_lamp_4'].attributes.brightness <
+                      '102 '? '.4' :
+                      states["light.hue_color_lamp_4"].attributes.brightness /
+                      255) : '0' }
+                    top: 50%
+                    width: 100%
+### And then the COOL white for RGB 255/255/255
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_4
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/bathroom_cool.png
+                    action: none
+                    entity: light.hue_color_lamp_4
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ (
+                      states["light.hue_color_lamp_4"].attributes.brightness ?
+                      states["light.hue_color_lamp_4"].attributes.brightness /
+                      255 : 0) -
+                      (states["light.hue_color_lamp_4"].attributes.hs_color ?
+                      states["light.hue_color_lamp_4"].attributes.hs_color[1]/99
+                      : 0)}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_2
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/ipad_room_red.png
+                    action: none
+                    entity: light.hue_color_lamp_2
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.hue_color_lamp_2"].attributes.hs_color ?
+                      states["light.hue_color_lamp_2"].attributes.hs_color[0] :
+                      "0") + "deg) saturate(" +
+                      (states["light.hue_color_lamp_2"].attributes.hs_color ?
+                      states["light.hue_color_lamp_2"].attributes.hs_color[1] :
+                      100)+ "%)" }
+                    opacity: >-
+                      ${states['light.hue_color_lamp_2'].state === 'on' ?
+                      (states['light.hue_color_lamp_2'].attributes.brightness <
+                      '102 '? '.4' :
+                      states["light.hue_color_lamp_2"].attributes.brightness /
+                      255) : '0' }
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_2
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/ipad_room_cool.png
+                    action: none
+                    entity: light.hue_color_lamp_2
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ (
+                      states["light.hue_color_lamp_2"].attributes.brightness ?
+                      states["light.hue_color_lamp_2"].attributes.brightness /
+                      255 : 0) -
+                      (states["light.hue_color_lamp_2"].attributes.hs_color ?
+                      states["light.hue_color_lamp_2"].attributes.hs_color[1]/99
+                      : 0)}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_1
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/stairs_red.png
+                    action: none
+                    entity: light.hue_color_lamp_1
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.hue_color_lamp_1"].attributes.hs_color ?
+                      states["light.hue_color_lamp_1"].attributes.hs_color[0] :
+                      "0") + "deg) saturate(" +
+                      (states["light.hue_color_lamp_1"].attributes.hs_color ?
+                      states["light.hue_color_lamp_1"].attributes.hs_color[1] :
+                      100)+ "%)" }
+                    opacity: >-
+                      ${states['light.hue_color_lamp_1'].state === 'on' ?
+                      (states['light.hue_color_lamp_1'].attributes.brightness <
+                      '102 '? '.4' :
+                      states["light.hue_color_lamp_1"].attributes.brightness /
+                      255) : '0' }
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_1
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/stairs_cool.png
+                    action: none
+                    entity: light.hue_color_lamp_1
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ (
+                      states["light.hue_color_lamp_1"].attributes.brightness ?
+                      states["light.hue_color_lamp_1"].attributes.brightness /
+                      255 : 0) -
+                      (states["light.hue_color_lamp_1"].attributes.hs_color ?
+                      states["light.hue_color_lamp_1"].attributes.hs_color[1]/99
+                      : 0)}
+                    top: 50%
+                    width: 100%
+### I like being able to see the outdoor lights from the basement view
+                - type: custom:config-template-card
+                  entities:
+                    - light.front_porch_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/porch.png
+                    action: none
+                    entity: light.front_porch_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.front_porch_light'].state === 'on' ? '1' :
+                      '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.fan_light
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/fan_light.png
+                    action: none
+                    entity: light.fan_light
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${states['light.fan_light'].state === 'on' ?
+                      (states['light.fan_light'].attributes.brightness < 64 ?
+                      .25 : states['light.fan_light'].attributes.brightness/
+                      255) : '0'}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_3
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/bed_red.png
+                    action: none
+                    entity: light.hue_color_lamp_3
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.hue_color_lamp_3"].attributes.hs_color ?
+                      states["light.hue_color_lamp_3"].attributes.hs_color[0] :
+                      "0") + "deg) saturate(" +
+                      (states["light.hue_color_lamp_3"].attributes.hs_color ?
+                      states["light.hue_color_lamp_3"].attributes.hs_color[1] :
+                      100)+ "%)" }
+                    opacity: >-
+                      ${states['light.hue_color_lamp_3'].state === 'on' ?
+                      (states['light.hue_color_lamp_3'].attributes.brightness <
+                      '102 '? '.4' :
+                      states["light.hue_color_lamp_3"].attributes.brightness /
+                      255) : '0' }
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_color_lamp_3
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/bed_cool.png
+                    action: none
+                    entity: light.hue_color_lamp_3
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ (
+                      states["light.hue_color_lamp_3"].attributes.brightness ?
+                      states["light.hue_color_lamp_3"].attributes.brightness /
+                      255 : 0) -
+                      (states["light.hue_color_lamp_3"].attributes.hs_color ?
+                      states["light.hue_color_lamp_3"].attributes.hs_color[1]/99
+                      : 0)}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_bloom_1
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/desk_left_red.png
+                    action: none
+                    entity: light.hue_bloom_1
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.hue_bloom_1"].attributes.hs_color ?
+                      states["light.hue_bloom_1"].attributes.hs_color[0] : "0")
+                      + "deg) saturate(" +
+                      (states["light.hue_bloom_1"].attributes.hs_color ?
+                      states["light.hue_bloom_1"].attributes.hs_color[1] : 100)+
+                      "%)" }
+                    opacity: >-
+                      ${states['light.hue_bloom_1'].state === 'on' ?
+                      (states['light.hue_bloom_1'].attributes.brightness < '102
+                      '? '.4' :
+                      states["light.hue_bloom_1"].attributes.brightness / 255) :
+                      '0' }
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_bloom_1
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/desk_left_cool.png
+                    action: none
+                    entity: light.hue_bloom_1
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ ( states["light.hue_bloom_1"].attributes.brightness ?
+                      states["light.hue_bloom_1"].attributes.brightness / 255 :
+                      0) - (states["light.hue_bloom_1"].attributes.hs_color ?
+                      states["light.hue_bloom_1"].attributes.hs_color[1]/99 :
+                      0)}
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_bloom_2
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/desk_right_red.png
+                    action: none
+                    entity: light.hue_bloom_2
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    filter: >-
+                      ${ "hue-rotate(" +
+                      (states["light.hue_bloom_2"].attributes.hs_color ?
+                      states["light.hue_bloom_2"].attributes.hs_color[0] : "0")
+                      + "deg) saturate(" +
+                      (states["light.hue_bloom_2"].attributes.hs_color ?
+                      states["light.hue_bloom_2"].attributes.hs_color[1] : 100)+
+                      "%)" }
+                    opacity: >-
+                      ${states['light.hue_bloom_2'].state === 'on' ?
+                      (states['light.hue_bloom_2'].attributes.brightness < '102
+                      '? '.4' :
+                      states["light.hue_bloom_2"].attributes.brightness / 255) :
+                      '0' }
+                    top: 50%
+                    width: 100%
+                - type: custom:config-template-card
+                  entities:
+                    - light.hue_bloom_2
+                  element:
+                    type: image
+                    image: /local/ui/floorplan/basement/desk_right_cool.png
+                    action: none
+                    entity: light.hue_bloom_2
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    mix-blend-mode: lighten
+                    opacity: >-
+                      ${ ( states["light.hue_bloom_2"].attributes.brightness ?
+                      states["light.hue_bloom_2"].attributes.brightness / 255 :
+                      0) - (states["light.hue_bloom_2"].attributes.hs_color ?
+                      states["light.hue_bloom_2"].attributes.hs_color[1]/99 :
+                      0)}
+                    top: 50%
+                    width: 100%
+### This is the outdoor grass mentioned previously. The same seamless tiled image
+### created for the upstairs view, simply using a different mask
+                - type: custom:config-template-card
+                  entities:
+                    - sensor.yard_local_path_basement
+                    - sensor.floorplan_opacity
+                  element:
+                    type: image
+                    image: ${states['sensor.yard_local_path_basement'].state}
+                    action: none
+                    entity: sensor.yard_local_path_basement
+                    tap_action:
+                      action: none
+                    hold_action:
+                      action: none
+                  style:
+                    height: 100%
+                    left: 50%
+                    opacity: ${states['sensor.floorplan_opacity'].state}
+                    top: 50%
+                    width: 100%
+### Then buttons for all the light entities:
+                - type: image
+                  entity: light.hue_color_lamp_4
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 33%
+                    left: 82%
+                    width: 7%
+                    height: 7%
+                    border: null
+                - type: image
+                  entity: light.hue_color_lamp_2
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 39%
+                    left: 58%
+                    width: 12%
+                    height: 12%
+                    border: null
+                - type: image
+                  entity: light.hue_color_lamp_1
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 43%
+                    left: 43.5%
+                    width: 7%
+                    height: 7%
+                    border: null
+                - type: image
+                  entity: light.hue_color_lamp_3
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 75.5%
+                    left: 17%
+                    width: 8%
+                    height: 8%
+                    border: null
+                - type: image
+                  entity: light.hue_bloom_1
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 78%
+                    left: 28%
+                    width: 5%
+                    height: 5%
+                    border: null
+                - type: image
+                  entity: light.hue_bloom_2
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 78%
+                    left: 35%
+                    width: 5%
+                    height: 5%
+                    border: null
+                - type: image
+                  entity: light.fan_light
+                  tap_action:
+                    action: toggle
+                  state_image:
+                    'on': /local/ui/floorplan/transparent.png
+                    'off': /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+                    top: 10.5%
+                    left: 33%
+                    width: 18%
+                    height: 18%
+                    border: null
+### Note this is the exact code used upstairs to toggle conditional cards:
+### "input_select.select_next"
+                - type: image
+                  entity: input_select.floor_select
+                  tap_action:
+                    action: call-service
+                    service: input_select.select_next
+                    service_data:
+                      entity_id: input_select.floor_select
+                  state_image:
+                    main: /local/ui/floorplan/transparent.png
+                    basement: /local/ui/floorplan/transparent.png
+                    unavailable: /local/ui/floorplan/unavailable.png
+                  style:
+### The only difference being a slight change in placement
+                    top: 42.5%
+                    left: 30%
+                    width: 15%
+                    height: 5%
+                    border: null
+                - type: state-label
+                  entity: sensor.fan_temperature
+                  prefix: 'Outside: '
+                  style:
+                    top: 93%
+                    left: 50%
+                    color: '#000'
+                    border-radius: 0%
+                    text-align: center
+                    background-color: rgba(255, 255, 255, 0.5)
+                    font-size: 80%
+                    font-weight: bold
+                    text-shadow: 0.25px 0.5px 0.5px white
+###
+###
+### And that's it!
+### Simple, right? :)
+###
+###
