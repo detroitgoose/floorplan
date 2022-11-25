@@ -1,5 +1,8 @@
 ### This floorplan is heavily inspired by https://github.com/lukevink/hass-config-lajv
-### Note, following the above tutorial will not work as expect after HA Core 11.0
+### Note, following the above Luke Vink tutorial will not work as expect after HA Core 11.0
+
+### This configuration heavily relies on the HACS config_template_card
+### https://github.com/iantrich/config-template-card
 
 ### I first created a 3d image of my home using "Sweet Home 3D" http://www.sweethome3d.com/
 ### Each light source is then rendered individually (1 image per light, unless RGB/RGBW)
